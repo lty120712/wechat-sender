@@ -23,3 +23,10 @@ log.txt
 # 系统
 .DS_Store
 Thumbs.db
+
+* text=auto
+*.bat text eol=crlf
+*.py text eol=lf
+*.ini text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
