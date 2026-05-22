@@ -54,3 +54,42 @@ def normalize_time(value: str) -> str:
     if match.group(3) is not None:
         return f"{hour:02d}:{minute:02d}:{second:02d}"
     return f"{hour:02d}:{minute:02d}"
+
+
+# ── 日期条件匹配 ──
+
+def validate_day_condition(value: str) -> str:
+    """校验发送条件格式，合法返回清洗后的值，非法抛出 ValueError。"""
+    c = (value or "").strip()
+    if not c or c == "*":
+        return c
+    seen = set()
+    for part in c.split(","):
+        p = part.strip()
+        if not p:
+            raise ValueError(f"发送条件 '{value}' 含空段，格式应为: * 或 1-7 或 1,3,5")
+        try:
+            n = int(p)
+        except ValueError:
+            raise ValueError(f"发送条件 '{value}' 含非法字符 '{p}'，只接受数字和逗号")
+        if n < 1 or n > 7:
+            raise ValueError(f"发送条件 '{value}' 中 {n} 超出范围(1-7)")
+        seen.add(n)
+    return ",".join(str(d) for d in sorted(seen))
+
+
+def match_day_condition(condition: str) -> bool:
+    if not condition:
+        return True
+    c = condition.strip()
+    if c == "*":
+        return True
+    from datetime import datetime
+    today = datetime.now().weekday() + 1
+    if "," in c:
+        days = {int(x.strip()) for x in c.split(",") if x.strip()}
+        return today in days
+    try:
+        return int(c) == today
+    except ValueError:
+        return False

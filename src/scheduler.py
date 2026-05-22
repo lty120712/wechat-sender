@@ -6,7 +6,8 @@ import time
 import schedule
 
 from src.config import AppConfig
-from src.loader import MessagePicker
+from src.loader import MessagePicker, TimedMessageItem, HolidayMessageItem
+from src.utils import match_day_condition
 from src.wechat import WeChatWindow
 
 
@@ -28,14 +29,29 @@ class Scheduler:
     # ── 任务定义 ──
 
     def _job_interval(self) -> None:
-        """间隔 / 每日发送任务。"""
         message = self.picker.pick()
-        self.wechat.send_message(message, self.config.char_delay, self.config.action_delay)
+        if message is None:
+            return
+        self.wechat.send_message(message.body, self.config.char_delay, self.config.action_delay)
 
-    def _job_timed(self, message: str):
-        """到点发送任务（工厂函数）。"""
+    def _job_timed(self, item: TimedMessageItem):
         def _do():
-            self.wechat.send_message(message, self.config.char_delay, self.config.action_delay)
+            if not item.enabled:
+                return
+            if not match_day_condition(item.day_condition):
+                return
+            self.wechat.send_message(item.body, self.config.char_delay, self.config.action_delay)
+        return _do
+
+    def _job_holiday(self, item: HolidayMessageItem):
+        def _do():
+            if not item.enabled:
+                return
+            from datetime import datetime
+            if datetime.now().strftime("%m-%d") != item.month_day:
+                return
+            self.wechat.send_message(item.body, self.config.char_delay, self.config.action_delay)
+            self.log.info(f"节日消息 [{item.name}] 已发送")
         return _do
 
     # ── 启动 ──
@@ -48,15 +64,19 @@ class Scheduler:
         if mode == "interval":
             schedule.every(self.config.interval).seconds.do(self._job_interval)
             self.log.info(f"间隔模式：每 {self.config.interval} 秒发送一次")
-        elif mode == "daily":
-            schedule.every().day.at(self.config.daily_time).do(self._job_interval)
-            self.log.info(f"每日模式：每天 {self.config.daily_time} 发送循环消息")
         else:
             raise ValueError(f"未知的调度模式：{mode}")
 
-        for send_time, message in self.config.timed_messages:
-            schedule.every().day.at(send_time).do(self._job_timed(message))
-            self.log.info(f"到点发送：每天 {send_time} 发送：{message[:30]}")
+        for tm in self.config.timed_messages:
+            schedule.every().day.at(tm.time).do(self._job_timed(tm))
+            label = f"[{tm.title}] " if tm.title else ""
+            flag = "" if tm.enabled else " [已禁用]"
+            self.log.info(f"到点发送：每天 {tm.time} {label}{tm.body[:30]}{flag}")
+
+        for hm in self.config.holiday_messages:
+            schedule.every().day.at(hm.time).do(self._job_holiday(hm))
+            flag = "" if hm.enabled else " [已禁用]"
+            self.log.info(f"节日消息：{hm.name}（{hm.month_day} {hm.time}）{flag}")
 
     def run(self) -> None:
         """进入主循环。"""

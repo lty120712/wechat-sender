@@ -82,11 +82,24 @@ from src.config import AppConfig
 ### Config
 `config.ini` 使用 `configparser` 读取，`delimiters=("=",)`。新功能添加配置项时在 `AppConfig` dataclass 中补充字段，`load_config()` 中解析，默认值保持一致。
 
-### Messages
-`data/messages.txt` 两种格式：
-1. 普通：一行一条消息
-2. 分块：`---` 分隔多行消息块
-行首 `#` / `;` 为注释，会被跳过。
+### Messages (Excel 为主，TXT 兼容)
+
+**Excel 文件 `data/messages.xlsx`**（主格式）：
+
+| 工作表 | 列 |
+|--------|-----|
+| `循环消息` | 消息标题 \| 消息体 |
+| `到点消息` | 时间 \| 消息标题 \| 消息体 |
+
+`loader.py` 自动根据扩展名分派：
+- `.xlsx` → 用 `openpyxl` 读取对应工作表
+- `.txt` → 按行或 `---` 分块读取（兼容旧格式）
+
+行首 `#` / `;` 在 txt 中为注释。
+
+关键 dataclass：
+- `MessageItem(title, body)` — 循环消息，`MessagePicker.pick()` 返回
+- `TimedMessageItem(time, title, body)` — 到点消息，`config.timed_messages` 承载
 
 ## Key Patterns
 
@@ -107,6 +120,16 @@ from src.config import AppConfig
 ### 消息选取（`src/loader.py`）
 - `MessagePicker` 有内部 `_index`，sequential 模式下循环递增，**不是线程安全**的
 - random 模式用 `random.choice()`
+- `pick()` 返回 `MessageItem`，调用方取 `.body` 获取实际文本
+
+### 消息来源（Excel）
+- `load_messages(source, base_dir)` → 读取 `[循环消息]` 工作表，返回 `List[MessageItem]`
+- `load_timed_messages(source, base_dir)` → 读取 `[到点消息]` 工作表，返回 `List[TimedMessageItem]`
+- 仅 `.xlsx` 支持到点消息；`.txt` 的 `load_timed_messages()` 返回空列表
+
+### Config
+- `timed_messages` 已从 `config.ini` 的 `[timed_messages]` 节迁移到 Excel 的 `[到点消息]` 工作表
+- `config.py` 中 `AppConfig.timed_messages` 类型变为 `List[TimedMessageItem]`
 
 ## Adding Features
 

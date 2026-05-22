@@ -35,18 +35,33 @@ class SendService:
             self.log.info(f"   消息来源：{cfg.message_source}")
 
         if len(cfg.messages) == 1:
-            self.log.info(f"   消息：{cfg.messages[0][:50]}")
+            m = cfg.messages[0]
+            label = f"[{m.title}] " if m.title else ""
+            cond = f" ({m.day_condition})" if m.day_condition else ""
+            flag = "" if m.enabled else " [已禁用]"
+            self.log.info(f"   消息：{label}{m.body[:50]}{cond}{flag}")
         else:
-            self.log.info(f"   消息：{len(cfg.messages)} 条 ({cfg.message_mode})")
-            for i, msg in enumerate(cfg.messages, 1):
-                preview = msg.replace("\n", " / ")
-                self.log.info(f"      [{i}] {preview[:50]}")
+            enabled = sum(1 for m in cfg.messages if m.enabled)
+            self.log.info(f"   消息：{enabled}/{len(cfg.messages)} 条启用 ({cfg.message_mode})")
+            for i, m in enumerate(cfg.messages, 1):
+                preview = m.body.replace("\n", " / ")
+                label = f"[{m.title}] " if m.title else ""
+                cond = f" ({m.day_condition})" if m.day_condition else ""
+                flag = "" if m.enabled else " [已禁用]"
+                self.log.info(f"      [{i}] {label}{preview[:50]}{cond}{flag}")
 
         self.log.info(f"   模式：{cfg.mode}")
 
         if cfg.timed_messages:
             self.log.info(f"   到点消息：{len(cfg.timed_messages)} 条")
-            for send_time, msg in cfg.timed_messages:
-                self.log.info(f"      {send_time} -> {msg[:30]}")
+            for tm in cfg.timed_messages:
+                label = f"[{tm.title}] " if tm.title else ""
+                self.log.info(f"      {tm.time} -> {label}{tm.body[:30]}")
+
+        if cfg.holiday_messages:
+            self.log.info(f"   节日消息：{len(cfg.holiday_messages)} 条")
+            for hm in cfg.holiday_messages:
+                flag = "" if hm.enabled else " [已禁用]"
+                self.log.info(f"      {hm.name}（{hm.month_day} {hm.time}）{flag}")
 
         self.log.info("=" * 55)
